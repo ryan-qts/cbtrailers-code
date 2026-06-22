@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OTP Image Review Tool</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --border: #2a2d3a;
+    --accent: #3b82f6;
+    --accent-dim: #1d4ed8;
+    --green: #22c55e;
+    --red: #ef4444;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --mono: 'JetBrains Mono', 'Fira Code', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
+
+  /* Setup screen */
+  #setup { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 2rem; }
+  .setup-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 2.5rem; max-width: 520px; width: 100%; }
+  .setup-card h1 { font-size: 22px; font-weight: 600; margin-bottom: 6px; }
+  .setup-card p { color: var(--muted); font-size: 14px; margin-bottom: 1.5rem; line-height: 1.6; }
+  .step { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; font-size: 13px; }
+  .step strong { display: block; color: var(--text); margin-bottom: 4px; }
+  .step span { color: var(--muted); font-family: var(--mono); font-size: 12px; }
+  .file-drop { border: 2px dashed var(--border); border-radius: 10px; padding: 2rem; text-align: center; cursor: pointer; transition: border-color 0.2s; margin: 1.5rem 0 1rem; }
+  .file-drop:hover, .file-drop.drag { border-color: var(--accent); }
+  .file-drop input { display: none; }
+  .file-drop p { color: var(--muted); font-size: 14px; margin-bottom: 8px; }
+  .file-drop .fname { color: var(--green); font-size: 13px; font-family: var(--mono); }
+  .btn { width: 100%; padding: 12px; border-radius: 10px; border: none; background: var(--accent); color: #fff; font-size: 15px; font-weight: 600; cursor: pointer; transition: background 0.15s; }
+  .btn:hover { background: var(--accent-dim); }
+  .btn:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; }
+
+  /* Review screen */
+  #review { display: none; min-height: 100vh; }
+  .topbar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 12px 24px; display: flex; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 100; }
+  .topbar h2 { font-size: 15px; font-weight: 600; }
+  .progress-wrap { flex: 1; background: var(--border); border-radius: 99px; height: 6px; overflow: hidden; }
+  .progress-bar { height: 100%; background: var(--accent); border-radius: 99px; transition: width 0.3s; }
+  .stats { font-size: 13px; color: var(--muted); white-space: nowrap; }
+  .stats b { color: var(--green); }
+
+  .main { max-width: 960px; margin: 0 auto; padding: 2rem 1.5rem; }
+  .product-name { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; margin-bottom: 4px; }
+  .product-meta { font-size: 12px; color: var(--muted); font-family: var(--mono); margin-bottom: 1.5rem; }
+
+  .images-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 1.5rem; }
+  .img-card { background: var(--surface); border: 2px solid var(--border); border-radius: 12px; overflow: hidden; cursor: pointer; transition: border-color 0.15s, transform 0.1s; position: relative; }
+  .img-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .img-card.selected { border-color: var(--green); }
+  .img-card.selected::after { content: '✓'; position: absolute; top: 8px; right: 8px; background: var(--green); color: #fff; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; }
+  .img-card img { width: 100%; height: 180px; object-fit: contain; background: #fff; display: block; }
+  .img-card .img-err { width: 100%; height: 180px; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 12px; background: var(--bg); }
+  .img-card .img-url { padding: 8px 10px; font-size: 10px; color: var(--muted); font-family: var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-top: 1px solid var(--border); }
+
+  .no-results { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 2rem; text-align: center; color: var(--muted); font-size: 14px; margin-bottom: 1.5rem; }
+
+  .actions { display: flex; gap: 10px; }
+  .act-btn { flex: 1; padding: 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+  .act-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .act-btn.skip { color: var(--muted); }
+  .act-btn.skip:hover { border-color: var(--muted); color: var(--text); }
+  .act-btn.confirm { background: var(--green); border-color: var(--green); color: #fff; }
+  .act-btn.confirm:hover { background: #16a34a; }
+  .act-btn.confirm:disabled { background: var(--border); border-color: var(--border); color: var(--muted); cursor: not-allowed; }
+
+  .kbd { background: var(--border); border-radius: 4px; padding: 2px 6px; font-size: 11px; font-family: var(--mono); color: var(--muted); }
+
+  /* Done screen */
+  #done { display: none; align-items: center; justify-content: center; min-height: 100vh; }
+  .done-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 2.5rem; max-width: 460px; width: 100%; text-align: center; }
+  .done-card h2 { font-size: 24px; margin-bottom: 8px; }
+  .done-card p { color: var(--muted); font-size: 14px; line-height: 1.6; margin-bottom: 1.5rem; }
+  .download-btn { display: inline-block; padding: 12px 28px; background: var(--green); border-radius: 10px; color: #fff; font-weight: 600; font-size: 15px; cursor: pointer; border: none; }
+</style>
+</head>
+<body>
+
+<!-- SETUP -->
+<div id="setup">
+  <div class="setup-card">
+    <h1>🖼 OTP Image Review</h1>
+    <p>Manually pick the right image for each product. Your choices are saved automatically and exported as <code>image_reviewed.json</code>.</p>
+
+    <div class="step">
+      <strong>Step 1 — Run the fetch script</strong>
+      <span>python fetch_images.py</span>
+    </div>
+    <div class="step">
+      <strong>Step 2 — Load the candidates file here</strong>
+      <span>image_candidates.json (generated by fetch script)</span>
+    </div>
+    <div class="step">
+      <strong>Step 3 — Review images, then download results</strong>
+      <span>python apply_images.py → writes choices to your xlsx</span>
+    </div>
+
+    <div class="file-drop" id="dropzone" onclick="document.getElementById('fileInput').click()">
+      <input type="file" id="fileInput" accept=".json" onchange="loadFile(this)">
+      <p>Drop <strong>image_candidates.json</strong> here or click to browse</p>
+      <div class="fname" id="fname"></div>
+    </div>
+
+    <button class="btn" id="startBtn" disabled onclick="startReview()">Start Review →</button>
+  </div>
+</div>
+
+<!-- REVIEW -->
+<div id="review">
+  <div class="topbar">
+    <h2>Image Review</h2>
+    <div class="progress-wrap"><div class="progress-bar" id="progressBar"></div></div>
+    <div class="stats" id="statsText"></div>
+    <button class="act-btn" style="flex:none;width:auto;padding:8px 14px;font-size:13px" onclick="downloadResults()">💾 Save & Download</button>
+  </div>
+  <div class="main">
+    <div class="product-name" id="productName"></div>
+    <div class="product-meta" id="productMeta"></div>
+    <div class="images-grid" id="imagesGrid"></div>
+    <div class="actions">
+      <button class="act-btn skip" onclick="skipItem()">Skip <span class="kbd">S</span></button>
+      <button class="act-btn confirm" id="confirmBtn" onclick="confirmSelection()" disabled>Use Selected Image <span class="kbd">Enter</span></button>
+    </div>
+  </div>
+</div>
+
+<!-- DONE -->
+<div id="done" style="display:none;align-items:center;justify-content:center;min-height:100vh;">
+  <div class="done-card">
+    <h2>🎉 Review Complete</h2>
+    <p id="doneStats"></p>
+    <button class="download-btn" onclick="downloadResults()">Download image_reviewed.json</button>
+    <p style="margin-top:1rem;font-size:12px;color:var(--muted)">Then run <code>python apply_images.py</code> to apply to your xlsx</p>
+  </div>
+</div>
+
+<script>
+let candidates = {};
+let keys = [];
+let currentIdx = 0;
+let reviewed = {};
+let selectedUrl = null;
+
+// Load any saved progress from localStorage
+const STORAGE_KEY = 'otp_image_reviewed';
+
+function loadSavedProgress() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) reviewed = JSON.parse(saved);
+  } catch(e) {}
+}
+
+function saveProgress() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(reviewed));
+  } catch(e) {}
+}
+
+// File loading
+const dropzone = document.getElementById('dropzone');
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropzone.classList.remove('drag');
+  const file = e.dataTransfer.files[0];
+  if (file) processFile(file);
+});
+
+function loadFile(input) {
+  if (input.files[0]) processFile(input.files[0]);
+}
+
+function processFile(file) {
+  document.getElementById('fname').textContent = file.name;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      candidates = JSON.parse(e.target.result);
+      keys = Object.keys(candidates);
+      document.getElementById('startBtn').disabled = false;
+      document.getElementById('fname').textContent = `✓ ${file.name} — ${keys.length} products loaded`;
+    } catch(err) {
+      alert('Invalid JSON file: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function startReview() {
+  loadSavedProgress();
+  // Find first unreviewed item
+  currentIdx = keys.findIndex(k => !reviewed[k]);
+  if (currentIdx === -1) currentIdx = 0;
+
+  document.getElementById('setup').style.display = 'none';
+  document.getElementById('review').style.display = 'block';
+  renderCurrent();
+}
+
+function renderCurrent() {
+  if (currentIdx >= keys.length) {
+    showDone();
+    return;
+  }
+
+  selectedUrl = null;
+  document.getElementById('confirmBtn').disabled = true;
+
+  const key = keys[currentIdx];
+  const item = candidates[key];
+  const done = Object.keys(reviewed).length;
+  const pct = (done / keys.length * 100).toFixed(1);
+
+  document.getElementById('progressBar').style.width = pct + '%';
+  document.getElementById('statsText').innerHTML =
+    `<b>${done}</b> / ${keys.length} reviewed`;
+
+  document.getElementById('productName').textContent = item.name;
+  document.getElementById('productMeta').textContent =
+    `Row ${item.row}  ·  Query: "${item.query}"  ·  ${currentIdx+1} of ${keys.length}`;
+
+  const grid = document.getElementById('imagesGrid');
+  grid.innerHTML = '';
+
+  if (!item.results || item.results.length === 0) {
+    grid.innerHTML = '<div class="no-results" style="grid-column:1/-1">No image results found for this product. Press Skip to continue.</div>';
+    return;
+  }
+
+  item.results.forEach((r, i) => {
+    const card = document.createElement('div');
+    card.className = 'img-card';
+    card.onclick = () => selectImage(card, r.full);
+
+    const img = document.createElement('img');
+    img.src = r.thumb || r.full;
+    img.alt = item.name;
+    img.onerror = () => {
+      img.style.display = 'none';
+      const err = document.createElement('div');
+      err.className = 'img-err';
+      err.textContent = 'Image failed to load';
+      card.insertBefore(err, card.firstChild);
+    };
+
+    const urlDiv = document.createElement('div');
+    urlDiv.className = 'img-url';
+    try {
+      urlDiv.textContent = new URL(r.full).hostname;
+    } catch(e) {
+      urlDiv.textContent = r.full.slice(0, 40);
+    }
+
+    card.appendChild(img);
+    card.appendChild(urlDiv);
+    grid.appendChild(card);
+
+    // Keyboard shortcut: 1-6
+    card.dataset.index = i;
+  });
+}
+
+function selectImage(card, url) {
+  document.querySelectorAll('.img-card').forEach(c => c.classList.remove('selected'));
+  card.classList.add('selected');
+  selectedUrl = url;
+  document.getElementById('confirmBtn').disabled = false;
+}
+
+function confirmSelection() {
+  if (!selectedUrl) return;
+  const key = keys[currentIdx];
+  reviewed[key] = { image: selectedUrl, name: candidates[key].name };
+  saveProgress();
+  currentIdx++;
+  // Skip already reviewed items
+  while (currentIdx < keys.length && reviewed[keys[currentIdx]]) {
+    currentIdx++;
+  }
+  renderCurrent();
+}
+
+function skipItem() {
+  const key = keys[currentIdx];
+  reviewed[key] = { image: '', name: candidates[key].name };
+  saveProgress();
+  currentIdx++;
+  while (currentIdx < keys.length && reviewed[keys[currentIdx]]) {
+    currentIdx++;
+  }
+  renderCurrent();
+}
+
+function showDone() {
+  document.getElementById('review').style.display = 'none';
+  document.getElementById('done').style.display = 'flex';
+  const chosen = Object.values(reviewed).filter(v => v.image).length;
+  const skipped = Object.values(reviewed).filter(v => !v.image).length;
+  document.getElementById('doneStats').textContent =
+    `${chosen} images selected, ${skipped} skipped. Download the JSON and run apply_images.py to update your spreadsheet.`;
+}
+
+function downloadResults() {
+  const blob = new Blob([JSON.stringify(reviewed, null, 2)], {type: 'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'image_reviewed.json';
+  a.click();
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+  if (document.getElementById('review').style.display === 'none') return;
+  if (e.key === 'Enter' && selectedUrl) confirmSelection();
+  if (e.key === 's' || e.key === 'S') skipItem();
+  // Number keys 1-6 to select images
+  const n = parseInt(e.key);
+  if (n >= 1 && n <= 6) {
+    const cards = document.querySelectorAll('.img-card');
+    if (cards[n-1]) {
+      const url = candidates[keys[currentIdx]].results[n-1]?.full;
+      if (url) selectImage(cards[n-1], url);
+    }
+  }
+});
+</script>
+</body>
+</html>
